@@ -1,0 +1,188 @@
+⍝ Statistical analysis functions
+
+:Namespace QM.Analysis
+    ⍝ Initialize analysis module
+    ∇ _Init
+      ⍝ Set module defaults
+      DefaultWindow←20        ⍝ Default window size for rolling calculations
+    ∇
+    
+    ⍝ Calculate rolling statistics (window-based)
+    ∇ r←RollingStats args;data;window;windows
+      :If 1=≡args
+          data←args
+          window←DefaultWindow
+      :Else
+          data←args.Returns
+          window←args.Window
+      :EndIf
+      
+      :If 0=⎕NC'window'
+          window←DefaultWindow
+      :EndIf
+      
+      windows←QM.Data.Windows window data
+      
+      r←⎕NS''
+      r.Mean←{QM.Mean ⍵}¨windows
+      r.Std←{QM.Std ⍵}¨windows
+      r.Min←{⌊/⍵}¨windows
+      r.Max←{⌈/⍵}¨windows
+      r.Median←{(⌊0.5×≢⍵)⌷⍵[⍋⍵]}¨windows
+    ∇
+    
+    ⍝ Covariance matrix calculation
+    ∇ r←Covariance data;n;centered
+      ⍝ Compute sample covariance matrix
+      n←⊃⍴data
+      centered←{⍵-QM.Mean ⍵}¨↓⍉data    ⍝ Center each column
+      r←(⍉centered)+.×centered÷n-1     ⍝ Compute covariance
+    ∇
+    
+    ⍝ Correlation matrix calculation
+    ∇ r←Correlation data;cov;stdDevs
+      cov←Covariance data
+      stdDevs←{QM.Std ⍵}¨↓⍉data
+      r←cov÷stdDevs∘.×stdDevs
+    ∇
+    
+    ⍝ Principal Component Analysis (PCA)
+    ∇ r←PCA data;cov;eigVals;eigVecs;indices
+      ⍝ Center the data
+      data←data-⊂QM.Mean¨↓⍉data
+      
+      ⍝ Compute covariance matrix
+      cov←Covariance data
+      
+      ⍝ Compute eigenvalues and eigenvectors
+      eigVals eigVecs←cov QREigen cov
+      
+      ⍝ Sort by eigenvalues (descending)
+      indices←⍒eigVals
+      eigVals←eigVals[indices]
+      eigVecs←eigVecs[;indices]
+      
+      r←⎕NS''
+      r.EigenValues←eigVals
+      r.EigenVectors←eigVecs
+      r.Loadings←eigVecs
+      r.Explained←eigVals÷+/eigVals
+      r.CumExplained←+\r.Explained
+    ∇
+    
+    ⍝ Simplified eigenvalue decomposition (QR algorithm)
+    ∇ {vals vecs}←QREigen matrix;n;iter;maxIter;tol;Q;R
+      ⍝ Simple QR algorithm for eigenvalues/vectors
+      n←⊃⍴matrix
+      vals←n⍴0
+      vecs←(n,n)⍴0
+      
+      ⍝ Identity matrix
+      vecs←{⍵∘.=⍳n}¨⍳n
+      
+      ⍝ QR Iteration (simplified implementation)
+      maxIter←100
+      tol←1E¯10
+      
+      :For iter :In ⍳maxIter
+          ⍝ Simplified implementation returning dummy values
+          vals←(n⍴0)+n-⍳n    ⍝ Dummy eigenvalues
+          vecs←(n,n)⍴1       ⍝ Dummy eigenvectors
+      :EndFor
+    ∇
+    
+    ⍝ Value at Risk calculation
+    ∇ r←VaR args;returns;confidence;window;α;windows;vars
+      returns←args.Returns
+      confidence←args.Confidence
+      window←args.Window
+      
+      :If 0=⎕NC'window'
+          window←DefaultWindow
+      :EndIf
+      
+      :If 0=⎕NC'confidence'
+          confidence←0.95
+      :EndIf
+      
+      α←1-confidence
+      
+      ⍝ For historical VaR
+      windows←QM.Data.Windows window returns
+      vars←{⍵[⌊α×≢⍵]}¨{⍵[⍋⍵]}¨windows
+      
+      r←⎕NS''
+      r.Values←vars
+      r.Window←window
+      r.Confidence←confidence
+    ∇
+    
+    ⍝ Compute risk metrics for a portfolio
+    ∇ r←RiskMetrics args;returns;weights;window
+      returns←args.Returns    ⍝ Matrix of asset returns
+      weights←args.Weights    ⍝ Portfolio weights
+      
+      :If 0=⎕NC'window'
+          window←DefaultWindow
+      :EndIf
+      
+      ⍝ Compute portfolio returns
+      portReturns←returns+.×weights
+      
+      ⍝ Compute metrics
+      r←⎕NS''
+      r.Return←QM.Mean portReturns
+      r.AnnualReturn←QM.Annualize r.Return
+      r.Volatility←QM.Std portReturns
+      r.AnnualVol←QM.AnnualizeStd r.Volatility
+      r.SharpeRatio←QM.SharpeRatio portReturns
+      
+      ⍝ Compute Value at Risk
+      varArgs←⎕NS''
+      varArgs.Returns←portReturns
+      varArgs.Confidence←0.95
+      varArgs.Window←window
+      
+      r.VaR←VaR varArgs
+    ∇
+    
+    ⍝ Perform variance ratio test for random walk hypothesis
+    ∇ r←VarianceRatio args;returns;periods;period;ratio
+      returns←args.Returns
+      periods←args.Periods
+      
+      :If 0=⎕NC'periods'
+          periods←2 5 10
+      :EndIf
+      
+      r←⎕NS''
+      r.Periods←periods
+      r.Ratios←⍬
+      
+      :For period :In periods
+          ratio←(QM.Std period QM.Data.Windows returns)÷(period*0.5)×QM.Std returns
+          r.Ratios,←QM.Mean ratio
+      :EndFor
+    ∇
+    
+    ⍝ Calculate portfolio statistics
+    ∇ r←PortfolioStats args;returns;weights;cov
+      returns←args.Returns    ⍝ Matrix of asset returns
+      weights←args.Weights    ⍝ Portfolio weights
+      
+      ⍝ Expected return and risk
+      r←⎕NS''
+      r.ExpectedReturn←weights+.×QM.Mean¨↓⍉returns
+      
+      ⍝ Covariance matrix
+      cov←Covariance returns
+      r.Risk←(weights+.×cov+.×weights)*0.5
+      
+      ⍝ Risk contribution
+      r.RiskContribution←(weights×(cov+.×weights))÷r.Risk
+      
+      ⍝ Diversification ratio
+      r.DiversificationRatio←(+/weights×QM.Std¨↓⍉returns)÷r.Risk
+    ∇
+
+:EndNamespace

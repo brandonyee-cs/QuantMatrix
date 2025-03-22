@@ -1,17 +1,22 @@
 {
     "version": "1.0.0",
     "name": "QuantMatrix",
+    "author": "Brandon Yee",
     "settings": {
         "dataPath": "data/",
         "cachePath": "cache/",
         "logPath": "logs/",
-        "maxThreads": 4
+        "maxThreads": 4,
+        "pythonPath": "python",
+        "autoSaveResults": true
     },
     "defaults": {
         "riskFreeRate": 0.02,
         "tradingDays": 252,
         "rebalancePeriod": 20,
-        "rollingWindow": 20
+        "rollingWindow": 20,
+        "confidenceLevel": 0.95,
+        "defaultStartDate": "-5y"
     },
     "display": {
         "dateFormat": "YYYY-MM-DD",
@@ -19,10 +24,36 @@
         "charts": {
             "width": 800,
             "height": 500,
-            "colors": [
-                "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-                "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"
-            ]
-        }
+            "themes": {
+                "default": {
+                    "background": "#ffffff",
+                    "text": "#333333",
+                    "grid": "#eeeeee",
+                    "colors": [
+                        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+                        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"
+                    ]
+                },
+                "dark": {
+                    "background": "#222222",
+                    "text": "#ffffff",
+                    "grid": "#444444",
+                    "colors": [
+                        "#4c9cf0", "#ffaa44", "#44c444", "#f04c4c",
+                        "#b575f0", "#c48866", "#f59ed0", "#aaaaaa"
+                    ]
+                }
+            }
+        },
+        "reportFormat": "markdown",
+        "defaultTheme": "default"
+    },
+    "scraper": {
+        "defaultTickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+        "defaultInterval": "1d",
+        "rateLimitPause": 1,
+        "timeout": 30,
+        "retries": 3,
+        "validateData": true
     }
 }

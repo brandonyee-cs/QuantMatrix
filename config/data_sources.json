@@ -1,22 +1,71 @@
 {
     "sources": [
         {
-            "name": "Local CSV",
+            "id": "yahoo",
+            "name": "Yahoo Finance (Python Scraper)",
+            "type": "python",
+            "script": "stock_scraper.py",
+            "enabled": true,
+            "defaultInterval": "1d",
+            "outputPath": "data/stocks/"
+        },
+        {
+            "id": "local_csv",
+            "name": "Local CSV Files",
             "type": "file",
             "path": "data/stocks/",
             "format": "csv",
             "dateColumn": "Date",
             "priceColumns": ["Open", "High", "Low", "Close"],
-            "volumeColumn": "Volume"
+            "volumeColumn": "Volume",
+            "enabled": true
         },
         {
-            "name": "Mock API",
+            "id": "alpha_vantage",
+            "name": "Alpha Vantage API",
             "type": "api",
-            "baseURL": "https://api.example.com/",
+            "baseURL": "https://www.alphavantage.co/query",
             "requiresAuth": true,
             "authType": "apikey",
-            "rateLimit": 100
+            "keyParam": "apikey",
+            "keyStorage": "config/api_keys.json",
+            "keyName": "alpha_vantage",
+            "rateLimit": 5,
+            "endpoints": {
+                "daily": "function=TIME_SERIES_DAILY",
+                "intraday": "function=TIME_SERIES_INTRADAY",
+                "weekly": "function=TIME_SERIES_WEEKLY"
+            },
+            "enabled": false
+        },
+        {
+            "id": "yahoo_api",
+            "name": "Yahoo Finance API",
+            "type": "api",
+            "baseURL": "https://yfapi.net",
+            "requiresAuth": true,
+            "authType": "header",
+            "headerName": "X-API-KEY",
+            "keyStorage": "config/api_keys.json",
+            "keyName": "yahoo_api",
+            "rateLimit": 100,
+            "endpoints": {
+                "quote": "/v6/finance/quote",
+                "chart": "/v8/finance/chart/{symbol}"
+            },
+            "enabled": false
         }
     ],
-    "defaultSource": "Local CSV"
+    "defaultSource": "yahoo",
+    "cacheDuration": 86400,
+    "dataFormats": {
+        "date": "YYYY-MM-DD",
+        "decimal": ".",
+        "thousands": ","
+    },
+    "errorHandling": {
+        "missingData": "interpolate",
+        "retryCount": 3,
+        "retryDelay": 2
+    }
 }
