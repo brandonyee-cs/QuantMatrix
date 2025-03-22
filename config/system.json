@@ -1,0 +1,28 @@
+{
+    "version": "1.0.0",
+    "name": "QuantMatrix",
+    "settings": {
+        "dataPath": "data/",
+        "cachePath": "cache/",
+        "logPath": "logs/",
+        "maxThreads": 4
+    },
+    "defaults": {
+        "riskFreeRate": 0.02,
+        "tradingDays": 252,
+        "rebalancePeriod": 20,
+        "rollingWindow": 20
+    },
+    "display": {
+        "dateFormat": "YYYY-MM-DD",
+        "precision": 4,
+        "charts": {
+            "width": 800,
+            "height": 500,
+            "colors": [
+                "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+                "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"
+            ]
+        }
+    }
+}

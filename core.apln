@@ -1,0 +1,139 @@
+⍝ Core utilities and namespace definition
+
+:Namespace QM
+    ⍝ Initialize system
+    ∇ Init
+      ⎕IO←0                  ⍝ Zero-based indexing
+      ⎕PP←16                 ⍝ Precision for financial calculations
+      ⎕DIV←1                 ⍝ Division by zero behavior
+      ⎕ML←3                  ⍝ Modern language settings
+      
+      ⍝ Load configuration
+      Config←LoadConfig 'config/system.json'
+      
+      ⍝ Initialize namespaces
+      ⍎¨'Data' 'Analysis' 'Patterns' 'Portfolio' 'ML' 'Viz' {⍺,'._Init'}¨⊂⍬
+      
+      'QuantMatrix initialized successfully'
+    ∇
+    
+    ⍝ Load configuration from JSON file
+    ∇ cfg←LoadConfig file;json
+      json←⊃⎕NGET file 1
+      cfg←∊⎕JSON json
+    ∇
+    
+    ⍝ Error handling utility
+    ∇ {r}←TryCatch fn;⎕TRAP
+      ⎕TRAP←(999 'C' '→failed')
+      r←⍎fn
+      →0
+     failed:
+      r←'ERROR: ',⊃⎕DM
+    ∇
+    
+    ⍝ General utilities
+    ∇ r←Range x
+      r←⍳≢x
+    ∇
+    
+    ∇ r←Mean x
+      r←(+/x)÷≢x
+    ∇
+    
+    ∇ r←Std x;m
+      m←Mean x
+      r←((+/(x-m)*2)÷≢x)*0.5
+    ∇
+    
+    ∇ r←{heading}FormatReport data;cols
+      :If 0=⎕NC'heading'
+          heading←'QuantMatrix Report'
+      :EndIf
+      
+      r←,⊂heading
+      r,←⊂(⎕UCS 9474,9472,9472,9472,9474)
+      
+      :If 2=≡data
+          :If 1=≢⍴data
+              r,←{⍵,[0.5]⍕¨data}⊂'Value'
+          :Else
+              cols←⍴data
+              r,←⊂(⍕cols[0]),' rows × ',(⍕cols[1]),' columns'
+              r,←{' ',(⍕⍵),': ',⍕data[⍵;]}¨⍳⌊/5,cols[0]
+          :EndIf
+      :Else
+          r,←⊂'Complex data structure'
+      :EndIf
+      
+      r←↑r
+    ∇
+    
+    ⍝ Date utilities
+    ∇ r←ParseDate date;parts
+      :If ' '∊date
+          parts←' '(≠⊆⊢)date
+          date←⊃parts
+      :EndIf
+      
+      :If '/'∊date
+          parts←'/'(≠⊆⊢)date
+          r←⍎¨parts[2 0 1]
+      :ElseIf '-'∊date
+          parts←'-'(≠⊆⊢)date
+          r←⍎¨parts
+      :Else
+          r←⍎date
+      :EndIf
+    ∇
+    
+    ∇ r←DateToNum date
+      ⍝ Convert YMD date to numeric format for calculations
+      :If 3≠≢date
+          date←ParseDate date
+      :EndIf
+      r←date[0]×10000
+      r+←date[1]×100
+      r+←date[2]
+    ∇
+    
+    ∇ r←NumToDate num
+      ⍝ Convert numeric date to YMD format
+      r←3⍴0
+      r[2]←num|100
+      num←⌊num÷100
+      r[1]←num|100
+      r[0]←⌊num÷100
+    ∇
+    
+    ⍝ Financial utilities
+    ∇ r←LogReturns prices
+      ⍝ Calculate log returns from price series
+      r←1↓(⍟prices)-(¯1)⌽⍟prices
+    ∇
+    
+    ∇ r←PctChange prices
+      ⍝ Calculate percentage changes from price series
+      r←1↓(prices÷(¯1)⌽prices)-1
+    ∇
+    
+    ∇ r←Annualize daily;factor
+      ⍝ Annualize daily returns
+      factor←252        ⍝ Trading days in a year
+      r←daily×factor    ⍝ For mean returns
+    ∇
+    
+    ∇ r←AnnualizeStd daily;factor
+      ⍝ Annualize daily standard deviation
+      factor←252        ⍝ Trading days in a year
+      r←daily×factor*0.5
+    ∇
+    
+    ∇ r←SharpeRatio returns;rf
+      ⍝ Calculate Sharpe ratio (assuming zero risk-free rate)
+      rf←0
+      r←(Mean returns)-rf
+      r÷←Std returns
+    ∇
+
+:EndNamespace

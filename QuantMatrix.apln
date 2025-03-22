@@ -1,0 +1,205 @@
+⍝ Main application entry point
+
+:Namespace QuantMatrix
+    ⍝ Main application entry point
+    
+    ⍝ Initialize system
+    ∇ r←Init
+      ⎕IO←0            ⍝ Zero-based indexing
+      ⎕PP←16           ⍝ Precision for financial calculations
+      
+      ⍝ Load QM namespace
+      ⍝ In a proper implementation, this would use )LOAD or similar
+      ⎕CY'QM'
+      
+      ⍝ Initialize system and modules
+      QM.Init
+      
+      r←'QuantMatrix initialized successfully'
+    ∇
+    
+    ⍝ Main function for analysis
+    ∇ r←Analyze args;data;analysisType;result
+      data←args.Data
+      analysisType←args.Type
+      
+      :Select analysisType
+      :Case 'Returns'
+          result←AnalyzeReturns data
+      :Case 'Volatility'
+          result←AnalyzeVolatility data
+      :Case 'Patterns'
+          result←AnalyzePatterns data
+      :Case 'Portfolio'
+          result←AnalyzePortfolio data
+      :Else
+          result←'Unknown analysis type: ',analysisType
+      :EndSelect
+      
+      r←result
+    ∇
+    
+    ⍝ Analyze returns
+    ∇ r←AnalyzeReturns data;returns;stats
+      returns←QM.LogReturns data.Close
+      
+      stats←⎕NS''
+      stats.Mean←QM.Mean returns
+      stats.Annualized←QM.Annualize stats.Mean
+      stats.Std←QM.Std returns
+      stats.AnnualizedStd←QM.AnnualizeStd stats.Std
+      stats.SharpeRatio←QM.SharpeRatio returns
+      
+      r←QM.FormatReport stats
+    ∇
+    
+    ⍝ Analyze volatility
+    ∇ r←AnalyzeVolatility data;window;rollingVol;args
+      window←20    ⍝ Default window size
+      
+      args←⎕NS''
+      args.Returns←QM.LogReturns data.Close
+      args.Window←window
+      
+      rollingVol←QM.Analysis.RollingStats args
+      
+      r←⎕NS''
+      r.Average←QM.Mean rollingVol.Std
+      r.Current←¯1↑rollingVol.Std
+      r.Trend←{+/2×⍵>QM.Mean ⍵}rollingVol.Std
+      r.Chart←QM.Viz.LineChart rollingVol.Std
+    ∇
+    
+    ⍝ Analyze technical patterns
+    ∇ r←AnalyzePatterns data;macd;rsi;bb;signals
+      macd←QM.Patterns.MACD data.Close
+      rsi←QM.Patterns.RSI data.Close
+      
+      args←⎕NS''
+      args.Prices←data.Close
+      bb←QM.Patterns.BollingerBands args
+      
+      signals←⎕NS''
+      signals.MACD←QM.Patterns.MACDSignal macd
+      
+      rsiArgs←⎕NS''
+      rsiArgs.RSI←rsi
+      signals.RSI←QM.Patterns.RSISignal rsiArgs
+      
+      r←⎕NS''
+      r.CurrentMACD←¯1↑macd.MACD
+      r.CurrentSignal←¯1↑macd.Signal
+      r.CurrentRSI←¯1↑rsi
+      r.Overbought←¯1↑signals.RSI.Overbought
+      r.Oversold←¯1↑signals.RSI.Oversold
+      r.BollingerPosition←(¯1↑data.Close)⍸¯1↑bb.Lower bb.Upper
+      r.Signals←signals
+    ∇
+    
+    ⍝ Analyze portfolio
+    ∇ r←AnalyzePortfolio data;tickers;prices;returns;args;ef;maxSharpe
+      tickers←data.Tickers
+      prices←data.Prices
+      returns←1↓prices÷¯1↓prices
+      
+      args←⎕NS''
+      args.Returns←returns
+      
+      ef←QM.Portfolio.EfficientFrontier args
+      
+      maxSharpeArgs←⎕NS''
+      maxSharpeArgs.Returns←returns
+      maxSharpe←QM.Portfolio.MaxSharpePortfolio maxSharpeArgs
+      
+      r←⎕NS''
+      r.OptimalWeights←maxSharpe
+      r.AllocationChart←QM.Viz.PieChart maxSharpe
+      r.EfficientFrontier←QM.Viz.EfficientFrontier ef
+      r.TickerWeights←tickers{⍺,⍵}¨maxSharpe
+    ∇
+    
+    ⍝ Run backtest
+    ∇ r←Backtest args;data;strategy;weights;result
+      data←args.Data
+      strategy←args.Strategy
+      
+      :Select strategy
+      :Case 'Equal'
+          weights←(≢data.Tickers)⍴1÷≢data.Tickers
+      :Case 'MinVariance'
+          mvArgs←⎕NS''
+          mvArgs.Returns←data.Returns
+          weights←QM.Portfolio.MinVariancePortfolio mvArgs
+      :Case 'MaxSharpe'
+          msArgs←⎕NS''
+          msArgs.Returns←data.Returns
+          weights←QM.Portfolio.MaxSharpePortfolio msArgs
+      :Case 'Custom'
+          weights←args.Weights
+      :Else
+          r←'Unknown strategy: ',strategy
+          →0
+      :EndSelect
+      
+      btArgs←⎕NS''
+      btArgs.Returns←data.Returns
+      btArgs.Weights←weights
+      btArgs.RebalancePeriod←args.RebalancePeriod
+      btArgs.InitialValue←args.InitialValue
+      
+      result←QM.Portfolio.Backtest btArgs
+      
+      r←result
+    ∇
+    
+    ⍝ Get help information
+    ∇ r←Help topic;topics
+      topics←'general' 'analysis' 'portfolio' 'patterns' 'data'
+      
+      :If 0=⎕NC'topic'
+          topic←'general'
+      :EndIf
+      
+      :Select topic
+      :Case 'general'
+          r←'QuantMatrix APL Financial Analysis System'
+          r,←⊂'------------------------------------'
+          r,←⊂'Use Init to initialize the system'
+          r,←⊂'Available topics: ',∊' '∘,¨topics
+          
+      :Case 'analysis'
+          r←'Analysis Functions'
+          r,←⊂'----------------'
+          r,←⊂'Analyze: Main analysis function'
+          r,←⊂'AnalyzeReturns: Calculate return statistics'
+          r,←⊂'AnalyzeVolatility: Analyze price volatility'
+          r,←⊂'AnalyzePatterns: Identify technical patterns'
+          
+      :Case 'portfolio'
+          r←'Portfolio Functions'
+          r,←⊂'------------------'
+          r,←⊂'AnalyzePortfolio: Portfolio optimization'
+          r,←⊂'Backtest: Run portfolio backtest'
+          
+      :Case 'patterns'
+          r←'Technical Patterns'
+          r,←⊂'------------------'
+          r,←⊂'Available patterns: MACD, RSI, Bollinger Bands'
+          r,←⊂'Use QM.Patterns namespace for direct access'
+          
+      :Case 'data'
+          r←'Data Functions'
+          r,←⊂'-------------'
+          r,←⊂'Use QM.Data namespace for data import/processing'
+          r,←⊂'ImportStock: Load stock data from CSV'
+          r,←⊂'MergeStocks: Combine multiple stock datasets'
+          
+      :Else
+          r←'Unknown topic: ',topic
+          r,←⊂'Available topics: ',∊' '∘,¨topics
+      :EndSelect
+      
+      r←↑r
+    ∇
+
+:EndNamespace

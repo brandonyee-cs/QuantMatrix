@@ -1,0 +1,731 @@
+⍝ Visualization functions
+
+:Namespace QM.Viz
+    ⍝ Initialize visualization module
+    ∇ _Init
+      ⍝ Color palettes
+      DefaultColors←'#1f77b4' '#ff7f0e' '#2ca02c' '#d62728' '#9467bd' '#8c564b' '#e377c2' '#7f7f7f' '#bcbd22' '#17becf'
+      DefaultConfig←⎕NS''
+      DefaultConfig.Width←800
+      DefaultConfig.Height←500
+      DefaultConfig.Title←'QuantMatrix Chart'
+    ∇
+    
+    ⍝ Generate basic line chart
+    ∇ r←LineChart args;data;labels;config;dates;i;colors;title;width;height
+      data←args.Data
+      dates←args.Dates
+      labels←args.Labels
+      config←args.Config
+      
+      :If 0=⎕NC'dates'
+          dates←⍳1⊃⍴data
+      :EndIf
+      
+      :If 0=⎕NC'labels'
+          :If 2=≡data
+              labels←⊂'Series 1'
+          :Else
+              labels←{'Series ',⍕⍵}¨⍳2⊃⍴data
+          :EndIf
+      :EndIf
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      ⍝ Assign colors
+      :If 2=≡data
+          colors←⊂DefaultColors[0]
+      :Else
+          colors←DefaultColors[⍳(2⊃⍴data)⌊≢DefaultColors]
+      :EndIf
+      
+      ⍝ Generate SVG (simplified for demonstration)
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.axis line, .axis path { stroke: #ccc; }'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.line { fill: none; stroke-width: 2px; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ For each series, add a path
+      :If 2=≡data
+          ⍝ Single series
+          r,←GenerateLinePath data dates colors[0] width height
+      :Else
+          ⍝ Multiple series
+          :For i :In ⍳2⊃⍴data
+              r,←GenerateLinePath data[;i] dates colors[i] width height
+          :EndFor
+      :EndIf
+      
+      ⍝ Add axes
+      r,←GenerateAxes dates width height
+      
+      ⍝ Add legend
+      r,←GenerateLegend labels colors width height
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Helper function to generate SVG path for a line
+    ∇ r←GenerateLinePath(data dates color width height);n;minY;maxY;xScale;yScale;path;i
+      n←≢data
+      minY←⌊/data
+      maxY←⌈/data
+      
+      ⍝ Define scales
+      xScale←{50+(width-100)×⍵÷n-1}
+      yScale←{(height-80)-((height-100)×(⍵-minY)÷maxY-minY)}
+      
+      ⍝ Create SVG path
+      path←'<path class="line" stroke="',color,'" d="M'
+      
+      :For i :In ⍳n
+          :If i=0
+              path,←(⍕xScale i),',',(⍕yScale data[i])
+          :Else
+              path,←' L',(⍕xScale i),',',(⍕yScale data[i])
+          :EndIf
+      :EndFor
+      
+      path,←'" />'
+      r←path
+    ∇
+    
+    ⍝ Helper function to generate axes
+    ∇ r←GenerateAxes(dates width height);n;i;xScale;interval
+      n←≢dates
+      
+      ⍝ Determine tick interval based on number of points
+      interval←⌈n÷10
+      
+      ⍝ Define x-scale
+      xScale←{50+(width-100)×⍵÷n-1}
+      
+      ⍝ Create axes
+      r←'<g class="axis">'
+      
+      ⍝ X-axis line
+      r,←'<line x1="50" y1="',(⍕height-50),'" x2="',(⍕width-50),'" y2="',(⍕height-50),'" stroke="#333" />'
+      
+      ⍝ Y-axis line
+      r,←'<line x1="50" y1="50" x2="50" y2="',(⍕height-50),'" stroke="#333" />'
+      
+      ⍝ X-axis ticks and labels
+      :For i :In (interval×⍳⌊n÷interval)∩⍳n
+          r,←'<line x1="',(⍕xScale i),'" y1="',(⍕height-50),'" x2="',(⍕xScale i),'" y2="',(⍕height-45),'" stroke="#333" />'
+          r,←'<text x="',(⍕xScale i),'" y="',(⍕height-35),'" text-anchor="middle" font-size="10">',(⍕dates[i]),'</text>'
+      :EndFor
+      
+      r,←'</g>'
+    ∇
+    
+    ⍝ Helper function to generate legend
+    ∇ r←GenerateLegend(labels colors width height);n;i
+      n←≢labels
+      
+      r←'<g class="legend" transform="translate(',(⍕width-200),',50)">'
+      
+      :For i :In ⍳n
+          r,←'<rect x="0" y="',(⍕i×20),'" width="10" height="10" fill="',(⍕colors[i]),'" />'
+          r,←'<text x="15" y="',(⍕10+i×20),'" font-size="10">',(⍕labels[i]),'</text>'
+      :EndFor
+      
+      r,←'</g>'
+    ∇
+    
+    ⍝ Generate candlestick chart
+    ∇ r←CandlestickChart args;dates;open;high;low;close;config;n;i;xScale;yScale;minY;maxY;width;height;title
+      dates←args.Dates
+      open←args.Open
+      high←args.High
+      low←args.Low
+      close←args.Close
+      config←args.Config
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      n←≢open
+      minY←⌊/low
+      maxY←⌈/high
+      
+      ⍝ Define scales
+      xScale←{50+(width-100)×⍵÷n-1}
+      yScale←{(height-80)-((height-100)×(⍵-minY)÷maxY-minY)}
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.candlestick-up { fill: #2ca02c; stroke: #2ca02c; }'
+      r,←'.candlestick-down { fill: #d62728; stroke: #d62728; }'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw candlesticks
+      :For i :In ⍳n
+          ⍝ Determine if up or down day
+          :If close[i]≥open[i]
+              class←'candlestick-up'
+          :Else
+              class←'candlestick-down'
+          :EndIf
+          
+          ⍝ Draw vertical line from high to low
+          r,←'<line class="',class,'" x1="',(⍕xScale i),'" y1="',(⍕yScale high[i]),'" '
+          r,←'x2="',(⍕xScale i),'" y2="',(⍕yScale low[i]),'" stroke-width="1" />'
+          
+          ⍝ Draw rectangle for open/close
+          r,←'<rect class="',class,'" x="',(⍕xScale i-0.3),'" y="',(⍕yScale(⌈/open[i],close[i])),'" '
+          r,←'width="',(⍕(xScale 0.6)-50),'" height="',(⍕|(yScale open[i])-(yScale close[i])),'" />'
+      :EndFor
+      
+      ⍝ Add axes
+      r,←GenerateAxes dates width height
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate heatmap for correlation matrix
+    ∇ r←CorrelationHeatmap args;corr;labels;config;n;i;j;width;height;cellSize;title;colorScale
+      corr←args.Correlation
+      labels←args.Labels
+      config←args.Config
+      
+      :If 0=⎕NC'labels'
+          labels←{'Asset ',⍕⍵}¨⍳1⊃⍴corr
+      :EndIf
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      n←1⊃⍴corr
+      cellSize←(width-100)⌊(height-100)÷n
+      
+      ⍝ Color scale function (-1 to 1)
+      colorScale←{
+          r←255×⍵<0
+          g←255×⍵>0
+          b←255×0.5×1-|⍵
+          'rgb(',⍕r,',',⍕g,',',⍕b,')'
+      }
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.label { font-size: 10px; }'
+      r,←'.cell { stroke: #ccc; stroke-width: 0.5px; }'
+      r,←'.cell-text { font-size: 8px; text-anchor: middle; fill: white; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw heatmap cells
+      :For i :In ⍳n
+          :For j :In ⍳n
+              ⍝ Draw cell
+              r,←'<rect class="cell" x="',(⍕50+j×cellSize),'" y="',(⍕50+i×cellSize),'" '
+              r,←'width="',⍕cellSize,'" height="',⍕cellSize,'" '
+              r,←'fill="',(colorScale corr[i;j]),'" />'
+              
+              ⍝ Add correlation value text
+              r,←'<text class="cell-text" x="',(⍕50+(j+0.5)×cellSize),'" y="',(⍕50+(i+0.5)×cellSize),'">'
+              r,←⍕⌊0.01×⌊100×corr[i;j]
+              r,←'</text>'
+          :EndFor
+          
+          ⍝ Add row label
+          r,←'<text class="label" x="',(⍕40),'" y="',(⍕50+(i+0.5)×cellSize),'" text-anchor="end">'
+          r,←⍕labels[i]
+          r,←'</text>'
+      :EndFor
+      
+      ⍝ Add column labels
+      :For j :In ⍳n
+          r,←'<text class="label" x="',(⍕50+(j+0.5)×cellSize),'" y="',(⍕40),'" text-anchor="middle" transform="rotate(-45,'
+          r,←⍕50+(j+0.5)×cellSize
+          r,←',40)">'
+          r,←⍕labels[j]
+          r,←'</text>'
+      :EndFor
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate scatterplot for two variables
+    ∇ r←ScatterPlot args;x;y;labels;color;config;n;xMin;xMax;yMin;yMax;width;height;title;xScale;yScale;i
+      x←args.X
+      y←args.Y
+      labels←args.Labels
+      color←args.Color
+      config←args.Config
+      
+      :If 0=⎕NC'labels'
+          labels←⍬
+      :EndIf
+      
+      :If 0=⎕NC'color'
+          color←DefaultColors[0]
+      :EndIf
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      n←≢x
+      xMin←⌊/x
+      xMax←⌈/x
+      yMin←⌊/y
+      yMax←⌈/y
+      
+      ⍝ Define scales
+      xScale←{50+((width-100)×(⍵-xMin)÷xMax-xMin)}
+      yScale←{(height-50)-((height-100)×(⍵-yMin)÷yMax-yMin)}
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.point { fill: ',color,'; stroke: #fff; stroke-width: 0.5px; }'
+      r,←'.axis line, .axis path { stroke: #ccc; }'
+      r,←'.label { font-size: 10px; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw points
+      :For i :In ⍳n
+          r,←'<circle class="point" cx="',(⍕xScale x[i]),'" cy="',(⍕yScale y[i]),'" r="5" />'
+          
+          ⍝ Add label if provided
+          :If (≢labels)≥i
+              r,←'<text class="label" x="',(⍕xScale x[i]+5),'" y="',(⍕yScale y[i]),'">',⍕labels[i],'</text>'
+          :EndIf
+      :EndFor
+      
+      ⍝ Draw axes
+      r,←'<g class="axis">'
+      ⍝ X-axis
+      r,←'<line x1="50" y1="',(⍕height-50),'" x2="',(⍕width-50),'" y2="',(⍕height-50),'" stroke="#333" />'
+      ⍝ Y-axis
+      r,←'<line x1="50" y1="50" x2="50" y2="',(⍕height-50),'" stroke="#333" />'
+      r,←'</g>'
+      
+      ⍝ Add axis labels
+      r,←'<text x="',(⍕width÷2),'" y="',(⍕height-10),'" text-anchor="middle">X</text>'
+      r,←'<text x="10" y="',(⍕height÷2),'" text-anchor="middle" transform="rotate(-90,10,',(⍕height÷2),')">Y</text>'
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate a histogram
+    ∇ r←Histogram args;data;bins;color;config;n;dataMin;dataMax;binWidth;counts;width;height;title;xScale;yScale;i;binEdges
+      data←args.Data
+      bins←args.Bins
+      color←args.Color
+      config←args.Config
+      
+      :If 0=⎕NC'bins'
+          bins←10
+      :EndIf
+      
+      :If 0=⎕NC'color'
+          color←DefaultColors[0]
+      :EndIf
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      ⍝ Compute histogram
+      dataMin←⌊/data
+      dataMax←⌈/data
+      binWidth←(dataMax-dataMin)÷bins
+      
+      ⍝ Create bin edges
+      binEdges←dataMin+binWidth×⍳bins+1
+      
+      ⍝ Count data points in each bin
+      counts←{+/((⍵≤data)∧data<⍵+binWidth)}¨binEdges[⍳bins]
+      
+      ⍝ Define scales
+      xScale←{50+((width-100)×(⍵-dataMin)÷dataMax-dataMin)}
+      yScale←{(height-50)-((height-100)×⍵÷⌈/counts)}
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.bar { fill: ',color,'; stroke: #fff; stroke-width: 0.5px; }'
+      r,←'.axis line, .axis path { stroke: #ccc; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw bars
+      :For i :In ⍳bins
+          r,←'<rect class="bar" x="',(⍕xScale binEdges[i]),'" y="',(⍕yScale counts[i]),'" '
+          r,←'width="',(⍕(xScale binEdges[i+1])-(xScale binEdges[i])),'" '
+          r,←'height="',(⍕(height-50)-(yScale counts[i])),'" />'
+      :EndFor
+      
+      ⍝ Draw axes
+      r,←'<g class="axis">'
+      ⍝ X-axis
+      r,←'<line x1="50" y1="',(⍕height-50),'" x2="',(⍕width-50),'" y2="',(⍕height-50),'" stroke="#333" />'
+      ⍝ Y-axis
+      r,←'<line x1="50" y1="50" x2="50" y2="',(⍕height-50),'" stroke="#333" />'
+      
+      ⍝ Add X-axis ticks and labels
+      :For i :In ⍳bins+1
+          r,←'<line x1="',(⍕xScale binEdges[i]),'" y1="',(⍕height-50),'" x2="',(⍕xScale binEdges[i]),'" y2="',(⍕height-45),'" stroke="#333" />'
+          r,←'<text x="',(⍕xScale binEdges[i]),'" y="',(⍕height-35),'" text-anchor="middle" font-size="10">',(⍕⌊0.01×⌊100×binEdges[i]),'</text>'
+      :EndFor
+      
+      r,←'</g>'
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate portfolio allocation pie chart
+    ∇ r←PieChart args;data;labels;colors;config;total;width;height;title;radius;cx;cy;startAngle;endAngle;i;x1;y1;x2;y2;largeArcFlag
+      data←args.Data
+      labels←args.Labels
+      colors←args.Colors
+      config←args.Config
+      
+      :If 0=⎕NC'labels'
+          labels←{'Slice ',⍕⍵}¨⍳≢data
+      :EndIf
+      
+      :If 0=⎕NC'colors'
+          colors←DefaultColors[⍳(≢data)⌊≢DefaultColors]
+      :EndIf
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      ⍝ Compute pie chart properties
+      total←+/data
+      radius←(width⌊height)÷2.5
+      cx←width÷2
+      cy←height÷2
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.slice { stroke: #fff; stroke-width: 1px; }'
+      r,←'.label { font-size: 12px; }'
+      r,←'.value { font-size: 10px; fill: #666; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw pie slices
+      startAngle←0
+      
+      :For i :In ⍳≢data
+          ⍝ Calculate angles
+          endAngle←startAngle+(data[i]÷total)×2×○1
+          
+          ⍝ Calculate points
+          x1←cx+radius×1○startAngle
+          y1←cy+radius×2○startAngle
+          x2←cx+radius×1○endAngle
+          y2←cy+radius×2○endAngle
+          
+          ⍝ Determine arc flags
+          largeArcFlag←(data[i]÷total)>0.5
+          
+          ⍝ Draw slice
+          r,←'<path class="slice" fill="',colors[i],'" d="M',⍕cx,',',⍕cy,' L',⍕x1,',',⍕y1,' A',⍕radius,',',⍕radius,' 0 '
+          r,←(largeArcFlag/'1'),' 1 ',⍕x2,',',⍕y2,' Z" />'
+          
+          ⍝ Add label
+          labelAngle←startAngle+((data[i]÷total)×○1)
+          labelX←cx+(radius+20)×1○labelAngle
+          labelY←cy+(radius+20)×2○labelAngle
+          
+          r,←'<text class="label" x="',⍕labelX,'" y="',⍕labelY,'" text-anchor="'
+          r,←(labelX<cx)/'end','" dominant-baseline="middle">'
+          r,←(labelX≥cx)/'start','" dominant-baseline="middle">'
+          r,←⍕labels[i]
+          r,←'</text>'
+          
+          ⍝ Add percentage
+          r,←'<text class="value" x="',⍕labelX,'" y="',(⍕labelY+15),'" text-anchor="'
+          r,←(labelX<cx)/'end','">'
+          r,←(labelX≥cx)/'start','">'
+          r,←⍕⌊0.1×⌊1000×data[i]÷total
+          r,←'%</text>'
+          
+          startAngle←endAngle
+      :EndFor
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate efficient frontier plot
+    ∇ r←EfficientFrontier args;returns;risks;weights;config;n;width;height;title;xScale;yScale;i;maxSharpe;minVar
+      returns←args.Returns
+      risks←args.Risks
+      weights←args.Weights
+      config←args.Config
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      n←≢returns
+      
+      ⍝ Define scales with padding
+      xScale←{50+((width-100)×(⍵-⌊/risks)×0.9÷(⌈/risks-⌊/risks)×1.1)}
+      yScale←{(height-50)-((height-100)×(⍵-⌊/returns)×0.9÷(⌈/returns-⌊/returns)×1.1)}
+      
+      ⍝ Find special portfolios
+      maxSharpe←returns⍳⌈/returns÷risks    ⍝ Maximum Sharpe ratio
+      minVar←risks⍳⌊/risks                 ⍝ Minimum variance
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.ef-line { fill: none; stroke: #1f77b4; stroke-width: 2px; }'
+      r,←'.point { fill: #666; r: 3px; }'
+      r,←'.special-point { r: 5px; stroke: #fff; stroke-width: 1px; }'
+      r,←'.max-sharpe { fill: #2ca02c; }'
+      r,←'.min-var { fill: #d62728; }'
+      r,←'.axis line, .axis path { stroke: #ccc; }'
+      r,←'.label { font-size: 10px; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw efficient frontier line
+      r,←'<path class="ef-line" d="M'
+      :For i :In ⍳n
+          :If i=0
+              r,←(⍕xScale risks[i]),',',(⍕yScale returns[i])
+          :Else
+              r,←' L',(⍕xScale risks[i]),',',(⍕yScale returns[i])
+          :EndIf
+      :EndFor
+      r,←'" />'
+      
+      ⍝ Draw points
+      :For i :In ⍳n
+          r,←'<circle class="point" cx="',(⍕xScale risks[i]),'" cy="',(⍕yScale returns[i]),'" />'
+      :EndFor
+      
+      ⍝ Highlight special portfolios
+      r,←'<circle class="special-point max-sharpe" cx="',(⍕xScale risks[maxSharpe]),'" cy="',(⍕yScale returns[maxSharpe]),'" />'
+      r,←'<text class="label" x="',(⍕xScale risks[maxSharpe]+5),'" y="',(⍕yScale returns[maxSharpe]),'">Max Sharpe</text>'
+      
+      r,←'<circle class="special-point min-var" cx="',(⍕xScale risks[minVar]),'" cy="',(⍕yScale returns[minVar]),'" />'
+      r,←'<text class="label" x="',(⍕xScale risks[minVar]+5),'" y="',(⍕yScale returns[minVar]),'">Min Variance</text>'
+      
+      ⍝ Draw axes
+      r,←'<g class="axis">'
+      ⍝ X-axis
+      r,←'<line x1="50" y1="',(⍕height-50),'" x2="',(⍕width-50),'" y2="',(⍕height-50),'" stroke="#333" />'
+      ⍝ Y-axis
+      r,←'<line x1="50" y1="50" x2="50" y2="',(⍕height-50),'" stroke="#333" />'
+      r,←'</g>'
+      
+      ⍝ Add axis labels
+      r,←'<text x="',(⍕width÷2),'" y="',(⍕height-10),'" text-anchor="middle">Risk (σ)</text>'
+      r,←'<text x="10" y="',(⍕height÷2),'" text-anchor="middle" transform="rotate(-90,10,',(⍕height÷2),')">Return (μ)</text>'
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Generate dashboard layout with multiple charts
+    ∇ r←Dashboard args;charts;layout;width;height;title;i;chart;left;top;chartWidth;chartHeight
+      charts←args.Charts
+      layout←args.Layout
+      width←args.Width
+      height←args.Height
+      title←args.Title
+      
+      :If 0=⎕NC'width'
+          width←1000
+      :EndIf
+      
+      :If 0=⎕NC'height'
+          height←800
+      :EndIf
+      
+      :If 0=⎕NC'title'
+          title←'QuantMatrix Dashboard'
+      :EndIf
+      
+      ⍝ Generate SVG container
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 20px; font-weight: bold; text-anchor: middle; }'
+      r,←'.panel { fill: #f9f9f9; stroke: #ddd; stroke-width: 1px; }'
+      r,←'.panel-title { font-size: 14px; font-weight: bold; text-anchor: middle; }'
+      r,←'</style>'
+      
+      ⍝ Dashboard title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw each chart based on layout
+      :For i :In ⍳≢charts
+          chart←charts[i]
+          left←layout[i;0]
+          top←layout[i;1]
+          chartWidth←layout[i;2]
+          chartHeight←layout[i;3]
+          
+          ⍝ Add panel background
+          r,←'<rect class="panel" x="',⍕left,'" y="',⍕top,'" width="',⍕chartWidth,'" height="',⍕chartHeight,'" />'
+          
+          ⍝ Add chart (assuming chart is SVG content)
+          r,←'<g transform="translate(',⍕left,',',⍕top,')">'
+          r,←chart
+          r,←'</g>'
+      :EndFor
+      
+      r,←'</svg>'
+    ∇
+    
+    ⍝ Export chart to SVG file
+    ∇ r←ExportSVG(chart file);tie
+      tie←file ⎕NCREATE 0
+      chart ⎕NPUT tie 80
+      ⎕NCLOSE tie
+      r←'Chart exported to ',file
+    ∇
+    
+    ⍝ Generate performance report visualization
+    ∇ r←PerformanceReport args;returns;benchmark;dates;config;cumReturns;cumBenchmark;width;height;title;xScale;yScale
+      returns←args.Returns
+      benchmark←args.Benchmark
+      dates←args.Dates
+      config←args.Config
+      
+      :If 0=⎕NC'config'
+          config←DefaultConfig
+      :EndIf
+      
+      ⍝ Extract configuration
+      title←config.Title
+      width←config.Width
+      height←config.Height
+      
+      ⍝ Calculate cumulative returns
+      cumReturns←×\1,returns
+      cumBenchmark←×\1,benchmark
+      
+      ⍝ Define scales
+      xScale←{50+((width-100)×⍵÷≢returns)}
+      yScale←{(height-50)-((height-100)×⍵÷⌈/cumReturns⌈cumBenchmark)}
+      
+      ⍝ Generate SVG
+      r←'<svg width="',⍕width,'" height="',⍕height,'" xmlns="http://www.w3.org/2000/svg">'
+      r,←'<style>'
+      r,←'.title { font-size: 16px; font-weight: bold; text-anchor: middle; }'
+      r,←'.portfolio { fill: none; stroke: #1f77b4; stroke-width: 2px; }'
+      r,←'.benchmark { fill: none; stroke: #ff7f0e; stroke-width: 2px; stroke-dasharray: 4 2; }'
+      r,←'.axis line, .axis path { stroke: #ccc; }'
+      r,←'.label { font-size: 10px; }'
+      r,←'</style>'
+      
+      ⍝ Title
+      r,←'<text class="title" x="',(⍕width÷2),'" y="30">',title,'</text>'
+      
+      ⍝ Draw portfolio line
+      r,←'<path class="portfolio" d="M'
+      :For i :In ⍳≢cumReturns
+          :If i=0
+              r,←(⍕xScale i),',',(⍕yScale cumReturns[i])
+          :Else
+              r,←' L',(⍕xScale i),',',(⍕yScale cumReturns[i])
+          :EndIf
+      :EndFor
+      r,←'" />'
+      
+      ⍝ Draw benchmark line
+      r,←'<path class="benchmark" d="M'
+      :For i :In ⍳≢cumBenchmark
+          :If i=0
+              r,←(⍕xScale i),',',(⍕yScale cumBenchmark[i])
+          :Else
+              r,←' L',(⍕xScale i),',',(⍕yScale cumBenchmark[i])
+          :EndIf
+      :EndFor
+      r,←'" />'
+      
+      ⍝ Draw axes
+      r,←'<g class="axis">'
+      ⍝ X-axis
+      r,←'<line x1="50" y1="',(⍕height-50),'" x2="',(⍕width-50),'" y2="',(⍕height-50),'" stroke="#333" />'
+      ⍝ Y-axis
+      r,←'<line x1="50" y1="50" x2="50" y2="',(⍕height-50),'" stroke="#333" />'
+      r,←'</g>'
+      
+      ⍝ Add legend
+      r,←'<rect x="',(⍕width-150),'" y="50" width="10" height="10" fill="none" stroke="#1f77b4" stroke-width="2" />'
+      r,←'<text x="',(⍕width-135),'" y="60" font-size="12">Portfolio</text>'
+      
+      r,←'<rect x="',(⍕width-150),'" y="70" width="10" height="10" fill="none" stroke="#ff7f0e" stroke-width="2" stroke-dasharray="4 2" />'
+      r,←'<text x="',(⍕width-135),'" y="80" font-size="12">Benchmark</text>'
+      
+      r,←'</svg>'
+    ∇
+
+:EndNamespace

@@ -1,0 +1,339 @@
+⍝ Technical patterns and signals
+
+:Namespace QM.Patterns
+    ⍝ Initialize patterns module
+    ∇ _Init
+      ⍝ Default settings
+      DefaultParams←⎕NS''
+      DefaultParams.MA←⊂12 26    ⍝ Default MACD parameters
+      DefaultParams.RSI←14       ⍝ Default RSI period
+    ∇
+    
+    ⍝ Simple moving average (SMA)
+    ∇ r←SMA args;prices;window;windows
+      :If 1=≡args
+          prices←args
+          window←20
+      :Else
+          prices←args.Prices
+          window←args.Window
+      :EndIf
+      
+      :If 0=⎕NC'window'
+          window←20
+      :EndIf
+      
+      windows←window{⍺↑¨(⍵-⍺+1)↑¨⍺↓¨⊂⍵⍴1}≢prices
+      r←{(+/⍵×prices)÷+/⍵}¨windows
+      r←(window-1)⍴0,r    ⍝ Pad with zeros for alignment
+    ∇
+    
+    ⍝ Exponential moving average (EMA)
+    ∇ r←EMA args;prices;window;α;i
+      :If 1=≡args
+          prices←args
+          window←20
+      :Else
+          prices←args.Prices
+          window←args.Window
+      :EndIf
+      
+      :If 0=⎕NC'window'
+          window←20
+      :EndIf
+      
+      α←2÷window+1    ⍝ Smoothing factor
+      
+      r←window⍴0
+      r[window-1]←QM.Mean window↑prices    ⍝ Seed with SMA
+      
+      :For i :In window↓⍳≢prices
+          r,←r[≢r-1]+α×(prices[i]-r[≢r-1])
+      :EndFor
+    ∇
+    
+    ⍝ MACD (Moving Average Convergence Divergence)
+    ∇ r←MACD args;prices;fast;slow;signal;fastEMA;slowEMA;macd
+      :If 1=≡args
+          prices←args
+          fast←12
+          slow←26
+          signal←9
+      :Else
+          prices←args.Prices
+          fast←args.Fast
+          slow←args.Slow
+          signal←args.Signal
+      :EndIf
+      
+      :If 0=⎕NC'fast'
+          fast←12
+      :EndIf
+      
+      :If 0=⎕NC'slow'
+          slow←26
+      :EndIf
+      
+      :If 0=⎕NC'signal'
+          signal←9
+      :EndIf
+      
+      ⍝ Calculate MACD components
+      fastArgs←⎕NS''
+      fastArgs.Prices←prices
+      fastArgs.Window←fast
+      fastEMA←EMA fastArgs
+      
+      slowArgs←⎕NS''
+      slowArgs.Prices←prices
+      slowArgs.Window←slow
+      slowEMA←EMA slowArgs
+      
+      macd←fastEMA-slowEMA
+      
+      signalArgs←⎕NS''
+      signalArgs.Prices←macd
+      signalArgs.Window←signal
+      
+      r←⎕NS''
+      r.MACD←macd
+      r.Signal←EMA signalArgs
+      r.Histogram←macd-r.Signal
+    ∇
+    
+    ⍝ Relative Strength Index (RSI)
+    ∇ r←RSI args;prices;period;diffs;gains;losses;avgGain;avgLoss;i;rs
+      :If 1=≡args
+          prices←args
+          period←14
+      :Else
+          prices←args.Prices
+          period←args.Period
+      :EndIf
+      
+      :If 0=⎕NC'period'
+          period←14
+      :EndIf
+      
+      ⍝ Calculate price differences
+      diffs←1↓prices-¯1↓prices
+      
+      ⍝ Separate gains and losses
+      gains←diffs×diffs>0
+      losses←|diffs×diffs<0
+      
+      ⍝ Initial average gain and loss
+      avgGain←QM.Mean period↑gains
+      avgLoss←QM.Mean period↑losses
+      
+      r←period⍴100    ⍝ Initialize with neutral RSI
+      
+      ⍝ Calculate RSI for remaining periods
+      :For i :In period↓⍳≢diffs
+          ⍝ Update averages with smoothing
+          avgGain←(avgGain×(period-1)+gains[i])÷period
+          avgLoss←(avgLoss×(period-1)+losses[i])÷period
+          
+          ⍝ Calculate relative strength and RSI
+          :If avgLoss=0
+              r,←100
+          :Else
+              rs←avgGain÷avgLoss
+              r,←100-100÷1+rs
+          :EndIf
+      :EndFor
+    ∇
+    
+    ⍝ Bollinger Bands
+    ∇ r←BollingerBands args;prices;window;stdDev;ma;std
+      :If 1=≡args
+          prices←args
+          window←20
+          stdDev←2
+      :Else
+          prices←args.Prices
+          window←args.Window
+          stdDev←args.StdDev
+      :EndIf
+      
+      :If 0=⎕NC'window'
+          window←20
+      :EndIf
+      
+      :If 0=⎕NC'stdDev'
+          stdDev←2
+      :EndIf
+      
+      ⍝ Calculate middle band (SMA)
+      maArgs←⎕NS''
+      maArgs.Prices←prices
+      maArgs.Window←window
+      ma←SMA maArgs
+      
+      ⍝ Calculate standard deviation
+      windows←QM.Data.Windows window prices
+      std←{QM.Std ⍵}¨window↓windows
+      std←(window-1)⍴0,std    ⍝ Pad with zeros
+      
+      r←⎕NS''
+      r.Middle←ma
+      r.Upper←ma+stdDev×std
+      r.Lower←ma-stdDev×std
+      r.Width←r.Upper-r.Lower
+      r.PercentB←(prices-r.Lower)÷r.Width
+    ∇
+    
+    ⍝ Identify support and resistance levels
+    ∇ r←SupportResistance args;prices;window;tolerance;peaks;troughs;levels
+      prices←args.Prices
+      
+      :If 0=⎕NC'window'
+          window←5
+      :EndIf
+      
+      :If 0=⎕NC'tolerance'
+          tolerance←0.02    ⍝ 2% tolerance
+      :EndIf
+      
+      ⍝ Find local peaks and troughs
+      peaks←{(⍵>1↓⍵)∧⍵>¯1↓⍵}¨1↓¯1↓QM.Data.Windows window prices
+      troughs←{(⍵<1↓⍵)∧⍵<¯1↓⍵}¨1↓¯1↓QM.Data.Windows window prices
+      
+      ⍝ Get price levels at peaks and troughs
+      peakLevels←∪prices×⊃∨/peaks
+      troughLevels←∪prices×⊃∨/troughs
+      
+      ⍝ Combine and sort levels
+      levels←peakLevels∪troughLevels
+      levels←levels[⍋levels]
+      
+      ⍝ Remove too close levels
+      levels←{1↑⍵}¨{⍵/⍨(1,1↓2</⍵)}levels
+      
+      r←⎕NS''
+      r.Levels←levels
+      r.Resistance←peakLevels
+      r.Support←troughLevels
+    ∇
+    
+    ⍝ Generate trading signals based on MACD
+    ∇ r←MACDSignal args;macd;lag
+      :If 0=⎕NC'args.MACD'
+          macd←MACD args
+      :Else
+          macd←args.MACD
+      :EndIf
+      
+      :If 0=⎕NC'lag'
+          lag←1
+      :EndIf
+      
+      ⍝ Calculate cross signals
+      r←⎕NS''
+      r.CrossAbove←(macd.MACD>macd.Signal)∧(lag⌽macd.MACD)≤(lag⌽macd.Signal)
+      r.CrossBelow←(macd.MACD<macd.Signal)∧(lag⌽macd.MACD)≥(lag⌽macd.Signal)
+      r.Strength←|macd.MACD-macd.Signal
+    ∇
+    
+    ⍝ Generate trading signals based on RSI
+    ∇ r←RSISignal args;rsi;overbought;oversold
+      :If 1=≡args
+          rsi←RSI args
+          overbought←70
+          oversold←30
+      :Else
+          :If 0=⎕NC'args.RSI'
+              rsi←RSI args
+          :Else
+              rsi←args.RSI
+          :EndIf
+          
+          overbought←args.Overbought
+          oversold←args.Oversold
+      :EndIf
+      
+      :If 0=⎕NC'overbought'
+          overbought←70
+      :EndIf
+      
+      :If 0=⎕NC'oversold'
+          oversold←30
+      :EndIf
+      
+      r←⎕NS''
+      r.Overbought←rsi>overbought
+      r.Oversold←rsi<oversold
+      r.ExitOverbought←(rsi<overbought)∧(1⌽rsi)≥overbought
+      r.ExitOversold←(rsi>oversold)∧(1⌽rsi)≤oversold
+    ∇
+    
+    ⍝ Candlestick pattern: Doji
+    ∇ r←Doji args;open;close;high;low;threshold
+      open←args.Open
+      close←args.Close
+      high←args.High
+      low←args.Low
+      
+      :If 0=⎕NC'threshold'
+          threshold←0.1    ⍝ 0.1% body threshold
+      :EndIf
+      
+      ⍝ Calculate body size relative to range
+      bodySize←|open-close
+      totalRange←high-low
+      r←(bodySize÷totalRange)<threshold
+    ∇
+    
+    ⍝ Generate candlestick pattern signals
+    ∇ r←CandlePatterns args;open;high;low;close
+      open←args.Open
+      high←args.High
+      low←args.Low
+      close←args.Close
+      
+      r←⎕NS''
+      
+      ⍝ Bullish engulfing
+      r.BullishEngulfing←(close>open)∧(1⌽close)<(1⌽open)∧(open<1⌽close)∧(close>1⌽open)
+      
+      ⍝ Bearish engulfing
+      r.BearishEngulfing←(close<open)∧(1⌽close)>(1⌽open)∧(open>1⌽close)∧(close<1⌽open)
+      
+      ⍝ Hammer (bullish)
+      r.Hammer←(close>open)∧(high-close)<(open-low)×3
+      
+      ⍝ Shooting Star (bearish)
+      r.ShootingStar←(close<open)∧(high-open)>(close-low)×3
+      
+      ⍝ Doji
+      dojiArgs←⎕NS''
+      dojiArgs.(Open Close High Low)←open close high low
+      r.Doji←Doji dojiArgs
+    ∇
+    
+    ⍝ Volume profile analysis
+    ∇ r←VolumeProfile args;prices;volumes;bins;binSize;lowerBound;upperBound;priceBins
+      prices←args.Prices
+      volumes←args.Volumes
+      bins←args.Bins
+      
+      :If 0=⎕NC'bins'
+          bins←10
+      :EndIf
+      
+      ⍝ Determine price range
+      lowerBound←⌊/prices
+      upperBound←⌈/prices
+      binSize←(upperBound-lowerBound)÷bins
+      
+      ⍝ Create price bins
+      priceBins←lowerBound+binSize×⍳bins
+      
+      ⍝ Assign volumes to bins
+      r←⎕NS''
+      r.PriceBins←priceBins
+      r.BinVolumes←{+/volumes×(⍵≤prices)∧prices<⍵+binSize}¨priceBins
+      r.POC←priceBins[⊃⍒r.BinVolumes]    ⍝ Point of Control
+    ∇
+
+:EndNamespace

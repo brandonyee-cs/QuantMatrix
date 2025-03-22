@@ -1,0 +1,22 @@
+{
+    "sources": [
+        {
+            "name": "Local CSV",
+            "type": "file",
+            "path": "data/stocks/",
+            "format": "csv",
+            "dateColumn": "Date",
+            "priceColumns": ["Open", "High", "Low", "Close"],
+            "volumeColumn": "Volume"
+        },
+        {
+            "name": "Mock API",
+            "type": "api",
+            "baseURL": "https://api.example.com/",
+            "requiresAuth": true,
+            "authType": "apikey",
+            "rateLimit": 100
+        }
+    ],
+    "defaultSource": "Local CSV"
+}

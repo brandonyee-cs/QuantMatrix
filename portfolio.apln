@@ -1,0 +1,257 @@
+⍝ Portfolio optimization
+
+:Namespace QM.Portfolio
+    ⍝ Initialize portfolio module
+    ∇ _Init
+      ⍝ Default portfolio parameters
+      DefaultRiskFree←0.02÷252    ⍝ Daily risk-free rate (2% annual)
+    ∇
+    
+    ⍝ Calculate efficient frontier
+    ∇ r←EfficientFrontier args;returns;cov;points;minReturn;maxReturn;stepSize;targetReturns;weights
+      returns←args.Returns
+      cov←args.Covariance
+      points←args.Points
+      
+      :If 0=⎕NC'cov'
+          cov←QM.Analysis.Covariance returns
+      :EndIf
+      
+      :If 0=⎕NC'points'
+          points←20
+      :EndIf
+      
+      ⍝ Determine return range
+      minReturn←⌊/QM.Mean¨↓⍉returns
+      maxReturn←⌈/QM.Mean¨↓⍉returns
+      stepSize←(maxReturn-minReturn)÷points-1
+      
+      ⍝ Generate target returns
+      targetReturns←minReturn+stepSize×⍳points
+      
+      ⍝ Calculate optimal portfolios for each target return
+      weights←{OptimalWeights ⍵ returns cov}¨targetReturns
+      
+      r←⎕NS''
+      r.Returns←targetReturns
+      r.Weights←weights
+      r.Risk←{PortfolioRisk ⍵ cov}¨weights
+      r.SharpeRatio←(r.Returns-DefaultRiskFree)÷r.Risk
+    ∇
+    
+    ⍝ Find the minimum variance portfolio
+    ∇ r←MinVariancePortfolio args;returns;cov;n
+      returns←args.Returns
+      
+      :If 0=⎕NC'cov'
+          cov←QM.Analysis.Covariance returns
+      :EndIf
+      
+      n←2⊃⍴returns    ⍝ Number of assets
+      
+      ⍝ Optimization parameters
+      ⍝ Find weights that minimize variance
+      r←OptimalWeights 0 returns cov    ⍝ Use 0 as target return
+    ∇
+    
+    ⍝ Find the maximum Sharpe ratio portfolio
+    ∇ r←MaxSharpePortfolio args;returns;cov;riskFree;ef;maxIdx
+      returns←args.Returns
+      
+      :If 0=⎕NC'cov'
+          cov←QM.Analysis.Covariance returns
+      :EndIf
+      
+      :If 0=⎕NC'riskFree'
+          riskFree←DefaultRiskFree
+      :EndIf
+      
+      ⍝ Calculate efficient frontier with many points
+      efArgs←⎕NS''
+      efArgs.Returns←returns
+      efArgs.Covariance←cov
+      efArgs.Points←50
+      
+      ef←EfficientFrontier efArgs
+      
+      ⍝ Find portfolio with maximum Sharpe ratio
+      maxIdx←ef.SharpeRatio⍳⌈/ef.SharpeRatio
+      r←ef.Weights[maxIdx]
+    ∇
+    
+    ⍝ Find optimal weights for a target return
+    ∇ r←OptimalWeights(targetReturn returns cov);n;meanReturns;A;b;c;result
+      n←2⊃⍴returns    ⍝ Number of assets
+      meanReturns←QM.Mean¨↓⍉returns
+      
+      ⍝ In a real implementation, this would use proper optimization
+      ⍝ Here we use a simplified approach for demonstration
+      
+      ⍝ For minimum variance, equal weight as fallback
+      :If targetReturn=0
+          r←n⍴1÷n
+          →0
+      :EndIf
+      
+      ⍝ For target return, try a weighted approach
+      ⍝ This is a simplified solver, not a true optimization
+      r←n⍴0
+      r[1+⍳2]←0.5    ⍝ Put weight on first two assets
+      
+      ⍝ Adjust to match target return approximately
+      r×←targetReturn÷r+.×meanReturns
+      
+      ⍝ Normalize weights
+      r÷←+/r
+    ∇
+    
+    ⍝ Calculate portfolio risk (standard deviation)
+    ∇ r←PortfolioRisk(weights cov)
+      r←(weights+.×cov+.×weights)*0.5
+    ∇
+    
+    ⍝ Calculate portfolio return
+    ∇ r←PortfolioReturn(weights returns)
+      r←weights+.×QM.Mean¨↓⍉returns
+    ∇
+    
+    ⍝ Risk parity portfolio allocation
+    ∇ r←RiskParity args;returns;cov;n;riskBudget;targetRisk;weights;iter;maxIter;tol;marginalRisk;totalRisk;riskContrib
+      returns←args.Returns
+      
+      :If 0=⎕NC'cov'
+          cov←QM.Analysis.Covariance returns
+      :EndIf
+      
+      n←2⊃⍴returns
+      
+      :If 0=⎕NC'riskBudget'
+          riskBudget←n⍴1÷n    ⍝ Equal risk contribution by default
+      :EndIf
+      
+      :If 0=⎕NC'targetRisk'
+          targetRisk←0.1      ⍝ Target annualized volatility
+      :EndIf
+      
+      ⍝ Initialize equal weights
+      weights←n⍴1÷n
+      
+      ⍝ Iterative solution (simplified)
+      maxIter←100
+      tol←1E¯6
+      
+      :For iter :In ⍳maxIter
+          ⍝ Calculate marginal risk contribution
+          totalRisk←PortfolioRisk weights cov
+          marginalRisk←(cov+.×weights)÷totalRisk
+          
+          ⍝ Risk contribution
+          riskContrib←weights×marginalRisk
+          
+          ⍝ Check if risk contributions match budget
+          :If tol>⌈/|riskContrib÷totalRisk-riskBudget
+              →0    ⍝ Converged
+          :EndIf
+          
+          ⍝ Update weights
+          weights←weights×(riskBudget÷riskContrib)*0.5
+          
+          ⍝ Normalize weights
+          weights÷←+/weights
+      :EndFor
+      
+      r←weights
+    ∇
+    
+    ⍝ Rebalance a portfolio to target weights
+    ∇ r←Rebalance args;currentValues;targetWeights;rebalanceTolerance
+      currentValues←args.CurrentValues
+      targetWeights←args.TargetWeights
+      
+      :If 0=⎕NC'rebalanceTolerance'
+          rebalanceTolerance←0.05    ⍝ 5% tolerance
+      :EndIf
+      
+      ⍝ Current portfolio weights
+      currentWeights←currentValues÷+/currentValues
+      
+      ⍝ Calculate weight differences
+      r←⎕NS''
+      r.CurrentValues←currentValues
+      r.CurrentWeights←currentWeights
+      r.TargetWeights←targetWeights
+      r.WeightDiff←currentWeights-targetWeights
+      
+      ⍝ Determine positions to adjust
+      r.NeedRebalance←rebalanceTolerance<|r.WeightDiff
+      
+      ⍝ Calculate trade amounts
+      totalValue←+/currentValues
+      r.TradeAmounts←totalValue×targetWeights-currentWeights
+      r.TradeDirection←×r.TradeAmounts    ⍝ Buy (1) or Sell (-1)
+    ∇
+    
+    ⍝ Perform portfolio backtest
+    ∇ r←Backtest args;returns;weights;rebalancePeriod;initialValue;n;t;value;holdings;prices;newWeights;i
+      returns←args.Returns
+      weights←args.Weights
+      rebalancePeriod←args.RebalancePeriod
+      initialValue←args.InitialValue
+      
+      :If 0=⎕NC'rebalancePeriod'
+          rebalancePeriod←20    ⍝ Monthly (assuming daily data)
+      :EndIf
+      
+      :If 0=⎕NC'initialValue'
+          initialValue←10000
+      :EndIf
+      
+      n←2⊃⍴returns    ⍝ Number of assets
+      t←1⊃⍴returns    ⍝ Number of time periods
+      
+      ⍝ Calculate prices from returns (normalized to start at 1)
+      prices←{×\1,1↓⍵}¨↓⍉returns
+      prices←⍉↑prices
+      
+      ⍝ Initialize portfolio
+      value←initialValue
+      holdings←initialValue×weights÷prices[0;]
+      
+      ⍝ Track portfolio value over time
+      r←⎕NS''
+      r.Values←value
+      r.Weights←,⊂weights
+      r.Holdings←,⊂holdings
+      
+      ⍝ Simulate trading
+      :For i :In 1↓⍳t
+          ⍝ Update holdings value
+          holdings←holdings×prices[i;]÷prices[i-1;]
+          value←+/holdings×prices[i;]
+          
+          ⍝ Store values
+          r.Values,←value
+          
+          ⍝ Rebalance if needed
+          :If 0=rebalancePeriod|i
+              newWeights←weights    ⍝ Use original weights (could be dynamic)
+              holdings←value×newWeights÷prices[i;]
+              
+              r.Weights,←⊂newWeights
+          :Else
+              r.Weights,←⊂holdings×prices[i;]÷value
+          :EndIf
+          
+          r.Holdings,←⊂holdings
+      :EndFor
+      
+      ⍝ Calculate performance metrics
+      r.Returns←1↓r.Values÷¯1↓r.Values
+      r.CumulativeReturn←(¯1↑r.Values)÷initialValue
+      r.CAGR←(r.CumulativeReturn*1÷t)-1
+      r.Volatility←QM.Std r.Returns
+      r.SharpeRatio←(QM.Mean r.Returns-1)÷r.Volatility
+      r.MaxDrawdown←1-⌊/r.Values÷⌈\r.Values
+    ∇
+
+:EndNamespace

@@ -1,0 +1,394 @@
+⍝ Machine learning models
+
+:Namespace QM.ML
+    ⍝ Initialize ML module
+    ∇ _Init
+      ⍝ Default ML parameters
+      DefaultLearningRate←0.01
+      DefaultEpochs←1000
+    ∇
+    
+    ⍝ Split data into training and test sets
+    ∇ r←TrainTestSplit args;data;labels;testSize;randomSeed;n;testN;indices;trainIdx;testIdx
+      data←args.Data
+      labels←args.Labels
+      testSize←args.TestSize
+      randomSeed←args.RandomSeed
+      
+      :If 0=⎕NC'testSize'
+          testSize←0.2
+      :EndIf
+      
+      ⍝ Number of samples
+      n←1⊃⍴data
+      testN←⌊n×testSize
+      
+      ⍝ Random indices
+      :If 0≠⎕NC'randomSeed'
+          {}⎕RL←randomSeed
+      :EndIf
+      
+      indices←⍳n
+      indices←indices[?n⍴n]    ⍝ Shuffle
+      
+      ⍝ Split indices
+      trainIdx←testN↓indices
+      testIdx←testN↑indices
+      
+      r←⎕NS''
+      r.TrainData←data[trainIdx;]
+      r.TestData←data[testIdx;]
+      r.TrainLabels←labels[trainIdx]
+      r.TestLabels←labels[testIdx]
+    ∇
+    
+    ⍝ Normalize features
+    ∇ r←Normalize args;data;means;stds
+      :If 1=≡args
+          data←args
+      :Else
+          data←args.Data
+      :EndIf
+      
+      ⍝ Compute means and standard deviations
+      means←QM.Mean¨↓⍉data
+      stds←QM.Std¨↓⍉data
+      
+      ⍝ Replace zero stds with 1 to avoid division by zero
+      stds←{⍵⌈1E¯10}¨stds
+      
+      r←⎕NS''
+      r.Means←means
+      r.Stds←stds
+      r.NormalizedData←(data-⊂means)÷⊂stds
+    ∇
+    
+    ⍝ Simple linear regression
+    ∇ r←LinearRegression args;X;y;λ;θ;α;epochs;m;n;i;h;cost;gradients
+      X←args.X
+      y←args.y
+      λ←args.Lambda
+      α←args.LearningRate
+      epochs←args.Epochs
+      
+      :If 0=⎕NC'λ'
+          λ←0    ⍝ No regularization by default
+      :EndIf
+      
+      :If 0=⎕NC'α'
+          α←DefaultLearningRate
+      :EndIf
+      
+      :If 0=⎕NC'epochs'
+          epochs←DefaultEpochs
+      :EndIf
+      
+      ⍝ Add intercept term
+      X←1,⍪X
+      
+      ⍝ Get dimensions
+      m←1⊃⍴X        ⍝ Number of samples
+      n←2⊃⍴X        ⍝ Number of features (including intercept)
+      
+      ⍝ Initialize weights
+      θ←n⍴0
+      
+      ⍝ Gradient descent
+      :For i :In ⍳epochs
+          ⍝ Hypothesis
+          h←X+.×θ
+          
+          ⍝ Cost function (MSE)
+          cost←(+/(h-y)*2)÷2×m
+          
+          ⍝ Calculate gradients
+          gradients←(⍉X)+.×(h-y)÷m
+          
+          ⍝ Add regularization (excluding intercept)
+          :If λ>0
+              gradients[1↓⍳n]+←(λ÷m)×θ[1↓⍳n]
+          :EndIf
+          
+          ⍝ Update weights
+          θ←θ-α×gradients
+      :EndFor
+      
+      r←⎕NS''
+      r.Theta←θ
+      r.Predict←{1,⍪⍵+.×θ}    ⍝ Prediction function
+      r.Cost←cost
+    ∇
+    
+    ⍝ Simple feed-forward neural network (single hidden layer)
+    ∇ r←NeuralNetwork args;X;y;hidden;λ;α;epochs;m;n;k;W1;W2;b1;b2;i;a1;z2;a2;δ2;δ1;dW1;dW2;db1;db2
+      X←args.X
+      y←args.y
+      hidden←args.Hidden
+      λ←args.Lambda
+      α←args.LearningRate
+      epochs←args.Epochs
+      
+      :If 0=⎕NC'hidden'
+          hidden←10    ⍝ Default hidden layer size
+      :EndIf
+      
+      :If 0=⎕NC'λ'
+          λ←0    ⍝ No regularization by default
+      :EndIf
+      
+      :If 0=⎕NC'α'
+          α←DefaultLearningRate
+      :EndIf
+      
+      :If 0=⎕NC'epochs'
+          epochs←DefaultEpochs
+      :EndIf
+      
+      ⍝ Get dimensions
+      m←1⊃⍴X        ⍝ Number of samples
+      n←2⊃⍴X        ⍝ Number of features
+      k←≢∪y          ⍝ Number of classes
+      
+      ⍝ Initialize weights (Xavier initialization)
+      W1←(hidden,n)⍴(6÷(hidden+n))*0.5×¯1+2×?hidden×n⍴0
+      W2←(k,hidden)⍴(6÷(k+hidden))*0.5×¯1+2×?k×hidden⍴0
+      b1←hidden⍴0
+      b2←k⍴0
+      
+      ⍝ Sigmoid activation function
+      Sigmoid←{1÷1+*-⍵}
+      
+      ⍝ One-hot encode the labels
+      y_onehot←{⍵=⍳k}¨y
+      
+      ⍝ Gradient descent
+      :For i :In ⍳epochs
+          ⍝ Forward propagation
+          z1←(⊂b1)+X+.×⍉W1
+          a1←Sigmoid z1
+          z2←(⊂b2)+a1+.×⍉W2
+          a2←Sigmoid z2
+          
+          ⍝ Backpropagation
+          δ2←a2-y_onehot
+          δ1←(δ2+.×W2)×a1×1-a1
+          
+          ⍝ Calculate gradients
+          dW2←(⍉δ2)+.×a1÷m
+          db2←+/δ2÷m
+          dW1←(⍉δ1)+.×X÷m
+          db1←+/δ1÷m
+          
+          ⍝ Add regularization
+          :If λ>0
+              dW2+←(λ÷m)×W2
+              dW1+←(λ÷m)×W1
+          :EndIf
+          
+          ⍝ Update weights
+          W1←W1-α×dW1
+          b1←b1-α×db1
+          W2←W2-α×dW2
+          b2←b2-α×db2
+      :EndFor
+      
+      ⍝ Define prediction function
+      Predict←{
+          z1←(⊂b1)+⍵+.×⍉W1
+          a1←Sigmoid z1
+          z2←(⊂b2)+a1+.×⍉W2
+          a2←Sigmoid z2
+          ⍝ Return predicted class
+          ⊃⍒¨a2
+      }
+      
+      r←⎕NS''
+      r.W1←W1
+      r.b1←b1
+      r.W2←W2
+      r.b2←b2
+      r.Predict←Predict
+    ∇
+    
+    ⍝ K-means clustering
+    ∇ r←KMeans args;X;k;maxIter;tol;m;n;centroids;clusterAssign;distances;newCentroids;iter;changed
+      X←args.X
+      k←args.k
+      maxIter←args.MaxIterations
+      tol←args.Tolerance
+      
+      :If 0=⎕NC'maxIter'
+          maxIter←100
+      :EndIf
+      
+      :If 0=⎕NC'tol'
+          tol←1E¯4
+      :EndIf
+      
+      ⍝ Get dimensions
+      m←1⊃⍴X    ⍝ Number of samples
+      n←2⊃⍴X    ⍝ Number of features
+      
+      ⍝ Initialize centroids randomly
+      centroids←X[k?m;]
+      
+      ⍝ Initialize cluster assignments
+      clusterAssign←m⍴0
+      
+      ⍝ K-means algorithm
+      :For iter :In ⍳maxIter
+          ⍝ Assign points to nearest centroid
+          distances←{+/(⍵-centroids[i;])*2}¨⍳k
+          clusterAssign←⊃⍒¨distances
+          
+          ⍝ Update centroids
+          newCentroids←↑{QM.Mean X[clusterAssign=⍵;]}¨⍳k
+          
+          ⍝ Check convergence
+          changed←⌈/,|newCentroids-centroids
+          :If changed<tol
+              →0    ⍝ Converged
+          :EndIf
+          
+          centroids←newCentroids
+      :EndFor
+      
+      r←⎕NS''
+      r.Centroids←centroids
+      r.ClusterAssignments←clusterAssign
+      r.Iterations←iter
+    ∇
+    
+    ⍝ Principal Component Analysis (simplified interface to QM.Analysis.PCA)
+    ∇ r←PCA args;data;components;pcaResult
+      data←args.Data
+      components←args.Components
+      
+      :If 0=⎕NC'components'
+          components←2    ⍝ Default to 2 components
+      :EndIf
+      
+      ⍝ Perform PCA via Analysis namespace
+      pcaResult←QM.Analysis.PCA data
+      
+      r←⎕NS''
+      r.EigenValues←components↑pcaResult.EigenValues
+      r.EigenVectors←pcaResult.EigenVectors[;⍳components]
+      r.Loadings←r.EigenVectors
+      r.TransformedData←data+.×r.EigenVectors
+      r.ExplainedVariance←components↑pcaResult.Explained
+      r.CumulativeExplained←components↑pcaResult.CumExplained
+    ∇
+    
+    ⍝ Calculate model evaluation metrics
+    ∇ r←ModelMetrics args;actual;predicted;residuals;mse;mae;mape
+      actual←args.Actual
+      predicted←args.Predicted
+      
+      ⍝ Calculate error metrics
+      residuals←actual-predicted
+      mse←QM.Mean residuals*2
+      mae←QM.Mean|residuals
+      mape←QM.Mean|residuals÷actual
+      
+      r←⎕NS''
+      r.MSE←mse
+      r.RMSE←mse*0.5
+      r.MAE←mae
+      r.MAPE←mape×100    ⍝ As percentage
+      r.R2←1-(+/(actual-predicted)*2)÷+/(actual-QM.Mean actual)*2
+    ∇
+    
+    ⍝ Time series forecasting with ARIMA (simplified)
+    ∇ r←ARIMA args;data;p;d;q;n;diff;ar;ma;params;i;pred;err
+      data←args.Data
+      p←args.p    ⍝ AR order
+      d←args.d    ⍝ Differencing order
+      q←args.q    ⍝ MA order
+      
+      :If 0=⎕NC'p' ⋄ p←1 ⋄ :EndIf
+      :If 0=⎕NC'd' ⋄ d←1 ⋄ :EndIf
+      :If 0=⎕NC'q' ⋄ q←1 ⋄ :EndIf
+      
+      n←≢data
+      
+      ⍝ Differencing
+      diff←data
+      :For i :In ⍳d
+          diff←1↓diff-¯1↓diff
+      :EndFor
+      
+      ⍝ In a real implementation, these parameters would be estimated
+      ⍝ Here we use dummy values for demonstration
+      ar←p⍴0.8*⍳p    ⍝ Dummy AR parameters
+      ma←q⍴0.6*⍳q    ⍝ Dummy MA parameters
+      
+      params←⎕NS''
+      params.AR←ar
+      params.MA←ma
+      
+      ⍝ Forecast next values (simplified)
+      pred←n↑data
+      err←n⍴0
+      
+      :For i :In (n-10)↓⍳n
+          pred[i]←+/ar×pred[i-⍳p]
+          pred[i]+←+/ma×err[i-⍳q]
+          err[i]←data[i]-pred[i]
+      :EndFor
+      
+      ⍝ Return forecast model
+      r←⎕NS''
+      r.Parameters←params
+      r.Fitted←pred
+      r.Errors←err
+      r.Forecast←{i←≢pred ⋄ pred,⊂+/ar×¯p↑pred}    ⍝ One-step forecast function
+    ∇
+    
+    ⍝ Anomaly detection using statistical methods
+    ∇ r←AnomalyDetection args;data;method;threshold;mean;std;median;mad;score
+      data←args.Data
+      method←args.Method
+      threshold←args.Threshold
+      
+      :If 0=⎕NC'method'
+          method←'zscore'    ⍝ Default method
+      :EndIf
+      
+      :If 0=⎕NC'threshold'
+          threshold←3        ⍝ Default threshold (3 standard deviations)
+      :EndIf
+      
+      ⍝ Calculate anomaly scores based on chosen method
+      :Select method
+      :Case 'zscore'    ⍝ Z-score method
+          mean←QM.Mean data
+          std←QM.Std data
+          score←|data-mean÷std
+          
+      :Case 'mad'       ⍝ Median Absolute Deviation
+          median←{(⌊0.5×≢⍵)⌷⍵[⍋⍵]}data
+          mad←{(⌊0.5×≢⍵)⌷⍵[⍋⍵]}|data-median
+          score←|data-median÷mad×1.4826    ⍝ Scale factor for normal distribution
+          
+      :Case 'iqr'       ⍝ Interquartile Range
+          sorted←data[⍋data]
+          q1←sorted[⌊0.25×≢sorted]
+          q3←sorted[⌊0.75×≢sorted]
+          iqr←q3-q1
+          score←(data<q1-threshold×iqr)∨(data>q3+threshold×iqr)
+          
+      :Else             ⍝ Default to Z-score
+          mean←QM.Mean data
+          std←QM.Std data
+          score←|data-mean÷std
+      :EndSelect
+      
+      r←⎕NS''
+      r.Scores←score
+      r.IsAnomaly←score>threshold
+      r.AnomalyIndices←⍸r.IsAnomaly
+      r.AnomalyValues←data[r.AnomalyIndices]
+    ∇
+
+:EndNamespace

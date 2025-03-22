@@ -1,0 +1,188 @@
+⍝ Data acquisition and preprocessing functionality
+
+:Namespace QM.Data
+    ⍝ Initialize data module
+    ∇ _Init
+      DataSources←QM.LoadConfig 'config/data_sources.json'
+      CachePath←'data/'
+      
+      ⍝ Check if data directory exists
+      :Trap 0
+          ⎕MKDIR'data/stocks'
+      :EndTrap
+    ∇
+
+    ⍝ Load CSV data from files created by Python scraper
+    ∇ {r}←LoadCSV file;raw;headers;data;csvText
+      :If 900⌶⍬ ⍝ Monadic ⎕NGET available?
+          csvText←⊃⎕NGET file 1
+      :Else
+          csvText←⊃⎕NGET file 80
+      :EndIf
+      
+      raw←⎕CSV csvText
+      headers←⊃raw
+      data←1↓raw
+      
+      r←⎕NS''
+      r.Headers←headers
+      r.Data←data
+      r.Rows←≢data
+      r.Columns←≢headers
+    ∇
+    
+    ⍝ Import stock data from CSV files created by Python scraper
+    ∇ r←ImportStock ticker;file;data;dates;prices;opens;highs;lows;closes;volumes
+      file←CachePath,'stocks/',ticker,'.csv'
+      
+      ⍝ Check if file exists
+      :If ~⎕NEXISTS file
+          r←'ERROR: File not found: ',file
+          →0
+      :EndIf
+      
+      data←LoadCSV file
+      
+      ⍝ Extract price columns based on common header names
+      headers←data.Headers
+      
+      dateCol←headers⍳⊂'Date'
+      dates←ParseDates data.Data[;dateCol]
+      
+      openCol←headers⍳⊂'Open'
+      opens←{⍎¨⍵}data.Data[;openCol]
+      
+      highCol←headers⍳⊂'High'
+      highs←{⍎¨⍵}data.Data[;highCol]
+      
+      lowCol←headers⍳⊂'Low'
+      lows←{⍎¨⍵}data.Data[;lowCol]
+      
+      closeCol←headers⍳⊂'Close'
+      closes←{⍎¨⍵}data.Data[;closeCol]
+      
+      volCol←headers⍳⊂'Volume'
+      volumes←{⍎¨⍵}data.Data[;volCol]
+      
+      r←⎕NS''
+      r.Ticker←ticker
+      r.Dates←dates
+      r.Open←opens
+      r.High←highs
+      r.Low←lows
+      r.Close←closes
+      r.Volume←volumes
+      r.Returns←1↓closes÷¯1↓closes
+      r.LogReturns←QM.LogReturns closes
+    ∇
+    
+    ⍝ Refresh stock data by running the Python scraper
+    ∇ r←RefreshStockData args;tickers;command;rc;output
+      ⍝ Default arguments
+      :If 0=⎕NC'args.Tickers'
+          tickers←'AAPL MSFT GOOGL AMZN META'
+      :Else
+          tickers←∊' ',¨args.Tickers
+      :EndIf
+      
+      ⍝ Build command to run Python scraper
+      command←'python stock_scraper.py --tickers',tickers
+      
+      ⍝ Add optional arguments if provided
+      :If 0≠⎕NC'args.StartDate'
+          command,←' --start ',args.StartDate
+      :EndIf
+      
+      :If 0≠⎕NC'args.EndDate'
+          command,←' --end ',args.EndDate
+      :EndIf
+      
+      :If 0≠⎕NC'args.Interval'
+          command,←' --interval ',args.Interval
+      :EndIf
+      
+      ⍝ Run the command
+      (rc output)←⎕SH command
+      
+      ⍝ Return result
+      :If rc=0
+          r←'Stock data refreshed successfully'
+      :Else
+          r←'Error refreshing stock data: ',output
+      :EndIf
+    ∇
+    
+    ⍝ Parse dates from various formats
+    ∇ r←ParseDates dates
+      r←{QM.ParseDate ⍵}¨dates
+    ∇
+    
+    ⍝ Clean missing values
+    ∇ r←CleanMissing data;mask;means
+      ⍝ Handle NaN or placeholder values in data
+      mask←~(data≠data)    ⍝ Create mask of non-NaN values
+      
+      ⍝ For simple vector
+      :If 1=≢⍴data
+          means←(+/data×mask)÷+/mask    ⍝ Mean ignoring NaNs
+          r←data×mask + (~mask)×means   ⍝ Replace NaNs with mean
+          
+      ⍝ For matrix (column-wise means)
+      :Else
+          means←(+⌿data×mask)÷+⌿mask    ⍝ Column means ignoring NaNs
+          r←data×mask + (~mask)∘.×means  ⍝ Replace NaNs with column means
+      :EndIf
+    ∇
+    
+    ⍝ Normalize data (z-score)
+    ∇ r←Normalize data;μ;σ
+      :If 1=≢⍴data
+          μ←QM.Mean data
+          σ←QM.Std data
+          r←(data-μ)÷σ
+      :Else
+          μ←QM.Mean¨↓⍉data
+          σ←QM.Std¨↓⍉data
+          r←(data-⊂μ)÷⊂σ
+      :EndIf
+    ∇
+    
+    ⍝ Create time windows for analysis
+    ∇ r←Windows size data
+      r←size{⍵↑⍨⍺⌊≢⍵}¨(⍳≢data)↓¨⊂data
+    ∇
+    
+    ⍝ Merge multiple stock datasets
+    ∇ r←MergeStocks tickers;stocks;allDates;uniqueDates;dateIndex;stock;i;j
+      stocks←ImportStock¨tickers
+      
+      ⍝ Get unique dates across all stocks
+      allDates←∊{⍵.Dates}¨stocks
+      uniqueDates←{⍵[⍋⍵]}∪allDates
+      
+      ⍝ Create merged dataset
+      r←⎕NS''
+      r.Tickers←tickers
+      r.Dates←uniqueDates
+      r.Prices←(≢uniqueDates, ≢tickers)⍴0
+      
+      ⍝ Fill price matrix
+      :For i :In ⍳≢tickers
+          stock←stocks[i]
+          dateIndex←uniqueDates⍳stock.Dates
+          :For j :In ⍳≢stock.Dates
+              r.Prices[dateIndex[j];i]←stock.Close[j]
+          :EndFor
+      :EndFor
+      
+      ⍝ Clean any missing values
+      r.Prices←CleanMissing r.Prices
+    ∇
+    
+    ⍝ List available stock data files
+    ∇ r←ListAvailableStocks;files
+      files←⊃⎕NINFO⍠('Wildcard' 1)⊢CachePath,'stocks/*.csv'
+      r←{⊃,/⎕NPARTS ⍵}¨files
+    ∇
+
+:EndNamespace
